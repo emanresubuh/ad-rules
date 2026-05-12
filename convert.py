@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 convert.py
-融合 217heidai 优化 + AdBlock + FakeIP Filter
+AdBlock Rules + FakeIP Filter 转换脚本
 所有输出文件统一存放到 rule_srs/ 目录
 """
 
@@ -40,12 +40,15 @@ CST              = timezone(timedelta(hours=8))
 
 REPO_USER        = "emanresubuh"
 REPO_NAME        = "ad-rules"
-SRS_URL          = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_srs/adblock_rules.srs"
-FAKEIP_SRS_URL   = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_srs/fakeipfilter.srs"
+
+# 正确的下载地址
+ADBLOCK_URL      = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_srs/adblock_rules.srs"
+FAKEIP_TXT_URL   = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_json/fakeipfilter.txt"
 
 PSL_URL = "https://publicsuffix.org/list/public_suffix_list.dat"
 # -------------------------
 
+# 正则
 HOSTS_RE     = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
 ADGUARD_RE   = re.compile(r"^\|\|([a-z0-9*.-]+)\^")
 DOMAIN_RE    = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+\.?)$")
@@ -199,8 +202,8 @@ def dedupe_subdomains(domains: Set[str]) -> List[str]:
     return result
 
 
-def compile_to_srs(json_path: str, srs_path: str, name: str):
-    print(f"[+] 正在编译 {name} → {srs_path}")
+def compile_to_srs(json_path: Path, srs_path: Path, name: str):
+    print(f"[+] 正在编译 {name} → {srs_path.name}")
     try:
         subprocess.run(
             [SING_BOX_BIN, "rule-set", "compile", "--output", str(srs_path), str(json_path)],
@@ -211,15 +214,15 @@ def compile_to_srs(json_path: str, srs_path: str, name: str):
         print(f"[!] {name} 编译失败: {e.stderr}")
         exit(1)
     except FileNotFoundError:
-        print("[-] sing-box 命令未找到")
+        print("[-] sing-box 命令未找到，请确保已安装并加入 PATH")
         exit(1)
 
 
 def process_fakeip_filter():
     print("[*] 开始处理 FakeIP Filter...")
-    text = fetch_text(FAKEIP_URL.replace("rule_srs", "rule_json").replace(".srs", ".txt"))
+    text = fetch_text(FAKEIP_TXT_URL)
     if not text:
-        print("[!] FakeIP Filter 下载失败")
+        print("[!] FakeIP Filter 下载失败，跳过")
         return False
 
     try:
@@ -248,30 +251,13 @@ def save_stats(data: Dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def generate_report(
-    now_str: str,
-    sources: List[str],
-    source_counts: Dict,
-    total_raw: int,
-    custom_block_count: int,
-    custom_allow_count: int,
-    allow_removed: int,
-    before_dedup: int,
-    final_count: int,
-    last_stats: Dict,
-    srs_size_kb: float
-) -> str:
+def generate_report(now_str, sources, source_counts, total_raw, custom_block_count,
+                    custom_allow_count, allow_removed, before_dedup, final_count,
+                    last_stats, srs_size_kb) -> str:
     last_count = last_stats.get("final_count")
-    if last_count is None:
-        diff_str = "_(首次生成，无历史数据对比)_"
-    else:
-        delta = final_count - last_count
-        if delta > 0:
-            diff_str = f"🔺 较上次增加 **{delta}** 条"
-        elif delta < 0:
-            diff_str = f"🔻 较上次减少 **{abs(delta)}** 条"
-        else:
-            diff_str = "➡️ 与上次相比无变化"
+    diff_str = "_(首次生成，无历史数据对比)_" if last_count is None else \
+               (f"🔺 较上次增加 **{final_count - last_count}** 条" if final_count > last_count else
+                f"🔻 较上次减少 **{last_count - final_count}** 条" if final_count < last_count else "➡️ 无变化")
 
     source_lines = "\n".join(f"  - `{url}` → **{source_counts.get(url, 0)}** 个" for url in sources)
 
@@ -300,8 +286,8 @@ def generate_report(
         "",
         "### 🚀 使用方式",
         "",
-        f"**AdBlock Rules**：\n`{SRS_URL}`",
-        f"**FakeIP Filter**：\n`{FAKEIP_SRS_URL}`",
+        f"**AdBlock Rules**： `{ADBLOCK_URL.replace('.srs', '.srs')}`",
+        f"**FakeIP Filter**： `{FAKEIP_TXT_URL.replace('.txt', '.srs')}`",
     ]
     return "\n".join(lines)
 
@@ -313,7 +299,7 @@ def main():
     now = datetime.now(CST)
     now_str = now.strftime("%Y-%m-%d %H:%M CST")
 
-    # ==================== AdBlock 处理 ====================
+    # AdBlock 处理
     sources = load_sources(SOURCE_FILE)
     all_domains: Set[str] = set()
     source_counts: Dict = {}
@@ -349,12 +335,12 @@ def main():
 
     compile_to_srs(JSON_OUTPUT, SRS_OUTPUT, "AdBlock")
 
-    # ==================== FakeIP Filter 处理 ====================
+    # FakeIP 处理
     fakeip_success = process_fakeip_filter()
     if fakeip_success:
         compile_to_srs(FAKEIP_JSON, FAKEIP_SRS, "FakeIP Filter")
 
-    # ==================== 报告 ====================
+    # 报告
     srs_size_kb = SRS_OUTPUT.stat().st_size / 1024
     last_stats = load_last_stats()
     report = generate_report(
@@ -366,10 +352,10 @@ def main():
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
         f.write(report)
     with open("README.md", "w", encoding="utf-8") as f:
-        f.write(f"# AdBlock Rules\n\n## 订阅链接\n\nAdBlock: {SRS_URL}\nFakeIP: {FAKEIP_SRS_URL}\n\n## 最新构建报告\n\n{report}")
+        f.write(f"# AdBlock Rules\n\n## 订阅链接\n\nAdBlock: {ADBLOCK_URL}\nFakeIP: {FAKEIP_TXT_URL.replace('.txt', '.srs')}\n\n## 最新构建报告\n\n{report}")
 
     save_stats({"final_count": final_count, "updated_at": now_str})
-    print(f"[+] 全部完成！文件已输出到 rule_srs/ 目录")
+    print(f"[+] 全部完成！所有文件已输出到 {OUTPUT_DIR} 目录")
 
 
 if __name__ == "__main__":
