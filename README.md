@@ -2,13 +2,12 @@
 
 ## 订阅链接
 
-```
-https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rules.srs
-```
+AdBlock SRS: https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rules.srs
+FakeIP SRS: https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_json/fakeipfilter.srs
 
 ## 最新构建报告
 
-## 📦 AdBlock Rules — 2026-05-12 21:27 CST
+## 📦 AdBlock Rules — 2026-05-12 22:41 CST
 
 ### 📊 本次统计
 
@@ -28,16 +27,15 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ### 📥 订阅源明细
 
-  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/native.vivo.txt` → 解析出 **237** 个域名
-  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → 解析出 **182749** 个域名
-  - `https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt` → 解析出 **804** 个域名
-  - `https://anti-ad.net/adguard.txt` → 解析出 **97055** 个域名
-  - `https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_11_Mobile/filter.txt` → 解析出 **919** 个域名
+  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/native.vivo.txt` → **237** 个
+  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → **182749** 个
+  - `https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt` → **804** 个
+  - `https://anti-ad.net/adguard.txt` → **97055** 个
+  - `https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_11_Mobile/filter.txt` → **919** 个
 
 ### 🚀 使用方式
 
-在 sing-box 配置中引用：
-
+AdBlock Rules：
 ```json
 {
   "type": "remote",
@@ -46,3 +44,5 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
   "update_interval": "24h"
 }
 ```
+
+FakeIP Filter：`https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_json/fakeipfilter.srs`
