@@ -1,5 +1,1 @@
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/native.vivo.txt
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt
-https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt
-https://anti-ad.net/adguard.txt
-https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_11_Mobile/filter.txt
+https://github.com/emanresubuh/ad-rules/blob/main/rule_json/fakeipfilter.txt
