@@ -34,6 +34,7 @@ HOSTS_RE      = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a
 ADGUARD_RE    = re.compile(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^")
 DOMAIN_RE     = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
 SKIP_LINE_RE  = re.compile(r"https?://|/")
+COSMETIC_RE   = re.compile(r"#[@$?]?#|#%#|#script:")
 
 INVALID_DOMAINS = {
     "localhost", "local", "broadcasthost", "ip6-localhost",
@@ -115,6 +116,14 @@ def parse_rules(text: str) -> set:
         if not line or line.startswith(("!", "#", "@@")):
             continue
 
+        # 跳过 cosmetic/脚本规则：## #@# #$# #%# #?# #script:
+        if COSMETIC_RE.search(line):
+            continue
+
+        # 跳过包含 http 或路径斜杠的行，避免误提取 URL 中的域名
+        if SKIP_LINE_RE.search(line):
+            continue
+
         # 1. AdGuard 格式：||example.com^
         m = ADGUARD_RE.match(line)
         if m:
@@ -131,11 +140,7 @@ def parse_rules(text: str) -> set:
                 domains.add(d)
             continue
 
-        # 3. 跳过包含 http 或路径斜杠的行，避免误提取 URL 中的域名
-        if SKIP_LINE_RE.search(line):
-            continue
-
-        # 4. 纯域名格式
+        # 3. 纯域名格式
         parts = line.split()
         if parts:
             candidate = normalize_domain(parts[0])
