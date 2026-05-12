@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 convert.py
-融合 217heidai/adblockfilters 优秀实践的 sing-box 专用转换脚本
-功能：多源下载 → 严格解析 → 全局去重 → 子域名去冗余 → 自定义规则 → PSL保护 → 生成 SRS
+融合 217heidai 优化 + 支持 AdBlock Rules 和 FakeIP Filter 转换
 """
 
 import re
@@ -18,8 +17,15 @@ from typing import Set, List, Dict
 SOURCE_FILE      = "source.txt"
 BLOCK_FILE       = "custom_block.txt"
 ALLOW_FILE       = "custom_allow.txt"
+
+# AdBlock 输出
 JSON_OUTPUT      = "adblock_rules.json"
 SRS_OUTPUT       = "adblock_rules.srs"
+
+# FakeIP Filter 输出
+FAKEIP_JSON      = "fakeipfilter.json"
+FAKEIP_SRS       = "fakeipfilter.srs"
+
 STATS_FILE       = "stats.json"
 REPORT_FILE      = "release_notes.md"
 SING_BOX_BIN     = "sing-box"
@@ -30,6 +36,7 @@ CST              = timezone(timedelta(hours=8))
 REPO_USER        = "emanresubuh"
 REPO_NAME        = "ad-rules"
 SRS_URL          = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_srs/adblock_rules.srs"
+FAKEIP_URL       = f"https://raw.githubusercontent.com/{REPO_USER}/{REPO_NAME}/main/rule_json/fakeipfilter.txt"
 
 PSL_URL = "https://publicsuffix.org/list/public_suffix_list.dat"
 # -------------------------
@@ -70,7 +77,7 @@ def load_public_suffix_list():
             line = line.strip().lower()
             if line and not line.startswith(("//", "!")):
                 PUBLIC_SUFFIXES.add(line)
-        print(f"[+] PSL 加载完成: {len(PUBLIC_SUFFIXES)} 条公共后缀")
+        print(f"[+] PSL 加载完成: {len(PUBLIC_SUFFIXES)} 条")
     except Exception as e:
         print(f"[!] PSL 加载失败: {e}")
 
@@ -131,7 +138,6 @@ def fetch_text(url: str) -> str:
 
 
 def parse_rules(text: str) -> Set[str]:
-    """严格解析规则（参考 217heidai 实践）"""
     domains: Set[str] = set()
     bad_keywords = {'/^', '/$', 'regex', 'domain=', '\( dnstype', 'denyallow', '[ \)', 
                    'important', 'third-party', 'popup', 'generichide', '*'}
@@ -146,14 +152,11 @@ def parse_rules(text: str) -> Set[str]:
             continue
 
         candidate = None
-        # AdGuard 格式
         m = ADGUARD_RE.match(line)
         if m:
             candidate = normalize_domain(m.group(1).replace('*', ''))
-        # Hosts 格式
         elif (m := HOSTS_RE.match(line)):
             candidate = normalize_domain(m.group(1))
-        # 纯域名兜底
         else:
             parts = line.split()
             if parts:
@@ -168,7 +171,6 @@ def parse_rules(text: str) -> Set[str]:
 
 
 def should_keep_domain(d: str) -> bool:
-    """域名过滤核心逻辑"""
     if not d or len(d) < 4 or '..' in d or d in INVALID_DOMAINS or d in WHITELIST_DOMAINS:
         return False
     if is_public_suffix(d) or any(d.endswith(s) for s in PRIVATE_SUFFIXES):
@@ -181,11 +183,9 @@ def should_keep_domain(d: str) -> bool:
 
 
 def dedupe_subdomains(domains: Set[str]) -> List[str]:
-    """子域名去冗余（短域名优先）"""
     sorted_domains = sorted(domains, key=lambda x: (len(x), x))
     result = []
     domain_set = set(domains)
-
     for domain in sorted_domains:
         is_redundant = False
         parts = domain.split('.')
@@ -197,6 +197,40 @@ def dedupe_subdomains(domains: Set[str]) -> List[str]:
         if not is_redundant:
             result.append(domain)
     return result
+
+
+def compile_to_srs(json_path: str, srs_path: str, name: str):
+    print(f"[+] 正在编译 {name} → {srs_path}")
+    try:
+        subprocess.run(
+            [SING_BOX_BIN, "rule-set", "compile", "--output", srs_path, json_path],
+            check=True, capture_output=True, text=True
+        )
+        print(f"[#] {name} 编译成功")
+    except subprocess.CalledProcessError as e:
+        print(f"[!] {name} 编译失败: {e.stderr}")
+        exit(1)
+    except FileNotFoundError:
+        print("[-] sing-box 命令未找到，请确保已安装并加入 PATH")
+        exit(1)
+
+
+def process_fakeip_filter():
+    print("[*] 开始处理 FakeIP Filter...")
+    text = fetch_text(FAKEIP_URL)
+    if not text:
+        print("[!] FakeIP Filter 下载失败，跳过")
+        return False
+
+    try:
+        # 直接保存为 JSON
+        with open(FAKEIP_JSON, "w", encoding="utf-8") as f:
+            f.write(text.strip())
+        print(f"[+] FakeIP Filter JSON 已保存: {FAKEIP_JSON}")
+        return True
+    except Exception as e:
+        print(f"[!] FakeIP 处理失败: {e}")
+        return False
 
 
 def load_last_stats() -> Dict:
@@ -240,9 +274,7 @@ def generate_report(
         else:
             diff_str = "➡️ 与上次相比无变化"
 
-    source_lines = "\n".join(
-        f"  - `{url}` → 解析出 **{source_counts.get(url, 0)}** 个域名" for url in sources
-    )
+    source_lines = "\n".join(f"  - `{url}` → **{source_counts.get(url, 0)}** 个" for url in sources)
 
     sing_box_snippet = f'''```json
 {{
@@ -278,20 +310,22 @@ def generate_report(
         "",
         "### 🚀 使用方式",
         "",
-        "在 sing-box 配置中引用：",
-        "",
+        "AdBlock Rules：",
         sing_box_snippet,
+        "",
+        f"FakeIP Filter：`{FAKEIP_URL.replace('.txt', '.srs')}`"
     ]
     return "\n".join(lines)
 
 
 def main():
-    print("[*] 启动 AdBlock 规则转换 (融合 217heidai 优化)")
+    print("[*] 启动 AdBlock + FakeIP Filter 转换流程")
     load_public_suffix_list()
 
     now = datetime.now(CST)
     now_str = now.strftime("%Y-%m-%d %H:%M CST")
 
+    # ==================== AdBlock 处理 ====================
     sources = load_sources(SOURCE_FILE)
     all_domains: Set[str] = set()
     source_counts: Dict = {}
@@ -301,67 +335,40 @@ def main():
         if text:
             extracted = parse_rules(text)
             source_counts[url] = len(extracted)
-            print(f"[+] 解析出 {len(extracted)} 个独立域名")
+            print(f"[+] 解析出 {len(extracted)} 个域名")
             all_domains |= extracted
-
-    if not all_domains:
-        print("[-] 没有抓取到任何有效域名，任务停止。")
-        return
 
     total_raw = len(all_domains)
 
-    # 合并自定义屏蔽
     custom_block = load_custom(BLOCK_FILE)
-    if custom_block:
-        print(f"[+] 自定义屏蔽追加: {len(custom_block)} 个")
-        all_domains |= custom_block
+    all_domains |= custom_block
 
-    # 应用白名单
     custom_allow = load_custom(ALLOW_FILE)
     allow_removed = 0
     if custom_allow:
         before = len(all_domains)
-        all_domains = {
-            d for d in all_domains
-            if not any(d == a or d.endswith('.' + a) or a.endswith('.' + d) for a in custom_allow)
-        }
+        all_domains = {d for d in all_domains if not any(
+            d == a or d.endswith('.' + a) or a.endswith('.' + d) for a in custom_allow)}
         allow_removed = before - len(all_domains)
-        print(f"[+] 白名单放行: 移除 {allow_removed} 个域名")
 
-    # 子域名去冗余
     before_dedup = len(all_domains)
-    print(f"[*] 去重前总计: {before_dedup} 个域名")
     deduped = dedupe_subdomains(all_domains)
     final_count = len(deduped)
-    print(f"[*] 子域名去冗余后: {final_count} 个域名")
 
-    # 生成 JSON
-    ruleset_json = {
-        "version": RULESET_VERSION,
-        "rules": [{"domain_suffix": deduped}]
-    }
+    # 生成 AdBlock JSON
+    ruleset_json = {"version": RULESET_VERSION, "rules": [{"domain_suffix": deduped}]}
     with open(JSON_OUTPUT, "w", encoding="utf-8") as f:
         json.dump(ruleset_json, f, ensure_ascii=False, indent=2)
-    print(f"[+] 已生成 {JSON_OUTPUT}")
 
-    # 编译 SRS
-    print("[+] 正在编译 SRS...")
-    try:
-        result = subprocess.run(
-            [SING_BOX_BIN, "rule-set", "compile", "--output", SRS_OUTPUT, JSON_OUTPUT],
-            capture_output=True, text=True, check=True
-        )
-        print("[#] SRS 编译成功")
-    except subprocess.CalledProcessError as e:
-        print(f"[!] 编译失败: {e.stderr}")
-        exit(1)
-    except FileNotFoundError:
-        print("[-] sing-box 命令未找到")
-        exit(1)
+    compile_to_srs(JSON_OUTPUT, SRS_OUTPUT, "AdBlock")
 
+    # ==================== FakeIP Filter 处理 ====================
+    fakeip_success = process_fakeip_filter()
+    if fakeip_success:
+        compile_to_srs(FAKEIP_JSON, FAKEIP_SRS, "FakeIP Filter")
+
+    # ==================== 生成报告 ====================
     srs_size_kb = Path(SRS_OUTPUT).stat().st_size / 1024
-
-    # 生成报告
     last_stats = load_last_stats()
     report = generate_report(
         now_str, sources, source_counts, total_raw,
@@ -372,10 +379,10 @@ def main():
     with open(REPORT_FILE, "w", encoding="utf-8") as f:
         f.write(report)
     with open("README.md", "w", encoding="utf-8") as f:
-        f.write(f"# AdBlock Rules\n\n## 订阅链接\n\n```\n{SRS_URL}\n```\n\n## 最新构建报告\n\n{report}")
+        f.write(f"# AdBlock Rules\n\n## 订阅链接\n\nAdBlock SRS: {SRS_URL}\nFakeIP SRS: {FAKEIP_URL.replace('.txt', '.srs')}\n\n## 最新构建报告\n\n{report}")
 
     save_stats({"final_count": final_count, "updated_at": now_str})
-    print(f"[+] 全部完成！最终规则数量: {final_count}")
+    print(f"[+] 全部完成！AdBlock: {final_count} 条 | FakeIP Filter 已转换")
 
 
 if __name__ == "__main__":
