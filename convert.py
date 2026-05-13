@@ -8,6 +8,7 @@ convert.py
 
 import re
 import json
+import time
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -25,6 +26,8 @@ REPORT_FILE      = "release_notes.md"
 SING_BOX_BIN     = "sing-box"
 RULESET_VERSION  = 2
 TIMEOUT          = 60
+FETCH_RETRIES    = 3
+RETRY_BACKOFF    = 2
 CST              = timezone(timedelta(hours=8))
 REPO_USER        = "emanresubuh"
 REPO_NAME        = "ad-rules"
@@ -32,9 +35,15 @@ SRS_URL          = "https://raw.githubusercontent.com/" + REPO_USER + "/" + REPO
 PSL_URL          = "https://publicsuffix.org/list/public_suffix_list.dat"
 # -------------------------
 
-ADGUARD_RE   = re.compile(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^")
+# AdGuard 格式：允许通配符 *，^ 后选项一律忽略
+ADGUARD_RE   = re.compile(r"^\|\|([a-z0-9*.-]+\.[a-z]{2,})\^")
+# Hosts 格式
 HOSTS_RE     = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
+# dnsmasq 格式：address=/example.com/
+DNSMASQ_RE   = re.compile(r"^address=/([a-z0-9.-]+\.[a-z]{2,})/")
+# 纯域名格式校验
 DOMAIN_RE    = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
+# cosmetic/脚本规则（整行跳过）
 COSMETIC_RE  = re.compile(r"#[@$?]?#|#%#|#script:")
 
 INVALID_DOMAINS: Set[str] = {
@@ -42,6 +51,8 @@ INVALID_DOMAINS: Set[str] = {
     "ip6-localnet", "ip6-mcastprefix", "ip6-allnodes", "ip6-allrouters", "ip6-allhosts"
 }
 
+# 只精确匹配主域本身，不放行其子域
+# 原因：子域可能存在广告（如 ads.youtube.com）
 WHITELIST_DOMAINS: Set[str] = {
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "google.com", "gstatic.com", "googleapis.com",
@@ -66,7 +77,8 @@ def load_public_suffix_list():
         resp.raise_for_status()
         for line in resp.text.splitlines():
             line = line.strip().lower()
-            if line and not line.startswith(("//", "!")):
+            # 跳过注释、空行、通配符条目（通配符条目不代表该域名本身是公共后缀）
+            if line and not line.startswith(("//", "!", "*")):
                 PUBLIC_SUFFIXES.add(line)
         print("[+] PSL 加载完成: " + str(len(PUBLIC_SUFFIXES)) + " 条公共后缀")
     except Exception as e:
@@ -75,22 +87,13 @@ def load_public_suffix_list():
 
 def is_public_suffix(domain: str) -> bool:
     """
-    判断域名本身是否就是一个公共后缀。
-    只做精确匹配和通配符匹配，不做截断匹配，
-    避免把 vivo.com.cn 这类合法域名误判为公共后缀。
+    只做精确匹配。
+    PSL 中的 *.ck 条目含义是 ck 下的二级域名都是可注册域名，
+    不代表 example.ck 本身是公共后缀，因此通配符条目在加载时已跳过。
     """
     if not domain:
         return False
-    # 精确匹配：域名本身就在 PSL 里（如 com、cn、com.cn）
-    if domain in PUBLIC_SUFFIXES:
-        return True
-    # 通配符匹配：PSL 里有 *.xx 条目（如 *.ck）
-    parts = domain.split('.')
-    if len(parts) >= 2:
-        wildcard = '*.' + '.'.join(parts[1:])
-        if wildcard in PUBLIC_SUFFIXES:
-            return True
-    return False
+    return domain in PUBLIC_SUFFIXES
 
 
 def normalize_domain(domain: str) -> str:
@@ -98,17 +101,16 @@ def normalize_domain(domain: str) -> str:
 
 
 def should_keep_domain(d: str) -> bool:
+    """域名过滤核心逻辑，只判断域名本身"""
     if not d or len(d) < 4:
         return False
     if '..' in d:
         return False
     if d in INVALID_DOMAINS:
         return False
+    # 只精确匹配白名单，不放行子域
     if d in WHITELIST_DOMAINS:
         return False
-    for w in WHITELIST_DOMAINS:
-        if d.endswith('.' + w):
-            return False
     if is_public_suffix(d):
         return False
     if any(d.endswith(s) for s in PRIVATE_SUFFIXES):
@@ -164,50 +166,72 @@ def save_stats(data: Dict):
 
 
 def fetch_text(url: str) -> str:
-    print("[+] 正在抓取: " + url)
-    try:
-        resp = requests.get(url, timeout=TIMEOUT)
-        resp.raise_for_status()
-        return resp.text
-    except Exception as e:
-        print("[!] 抓取失败 " + url + ": " + str(e))
-        return ""
+    """带重试和指数退避的抓取"""
+    for attempt in range(1, FETCH_RETRIES + 1):
+        try:
+            print("[+] 正在抓取 (第 " + str(attempt) + " 次): " + url)
+            resp = requests.get(url, timeout=TIMEOUT)
+            resp.raise_for_status()
+            return resp.text
+        except Exception as e:
+            print("[!] 抓取失败: " + str(e))
+            if attempt < FETCH_RETRIES:
+                wait = RETRY_BACKOFF ** attempt
+                print("[*] " + str(wait) + " 秒后重试...")
+                time.sleep(wait)
+    print("[-] 已放弃: " + url)
+    return ""
 
 
 def parse_rules(text: str) -> Set[str]:
+    """
+    解析规则：先提取域名，再过滤。
+    不对整行做内容判断（除 cosmetic 行），
+    确保带选项的规则（$third-party 等）不会因选项丢失域名。
+    """
     domains: Set[str] = set()
 
     for line in text.splitlines():
         line = line.strip().lower()
 
+        # 空行、注释、白名单行、文件头跳过
         if not line or line.startswith(("!", "#", "@@", "[adblock", ";")):
             continue
 
+        # cosmetic/脚本规则整行跳过
         if COSMETIC_RE.search(line):
             continue
 
         candidate = None
 
-        # 1. AdGuard 格式：||example.com^ 或 ||example.com^$options
+        # 1. AdGuard 格式：||example.com^ 或 ||*.example.com^$options
         m = ADGUARD_RE.match(line)
         if m:
+            raw = m.group(1)
+            # 通配符规则 ||*.example.com^ → 保留父域 example.com
+            if raw.startswith("*."):
+                raw = raw[2:]
+            candidate = normalize_domain(raw)
+
+        # 2. dnsmasq 格式：address=/example.com/
+        elif DNSMASQ_RE.match(line):
+            m = DNSMASQ_RE.match(line)
             candidate = normalize_domain(m.group(1))
 
-        # 2. Hosts 格式：0.0.0.0 example.com
-        else:
+        # 3. Hosts 格式：0.0.0.0 example.com
+        elif HOSTS_RE.match(line):
             m = HOSTS_RE.match(line)
-            if m:
-                candidate = normalize_domain(m.group(1))
+            candidate = normalize_domain(m.group(1))
 
-            # 3. 纯域名兜底
-            else:
-                if '/' in line or line.startswith("http"):
-                    continue
-                parts = line.split()
-                if parts:
-                    cand = normalize_domain(parts[0])
-                    if DOMAIN_RE.match(cand):
-                        candidate = cand
+        # 4. 纯域名兜底（裸域名行）
+        else:
+            if '/' in line or line.startswith("http"):
+                continue
+            parts = line.split()
+            if parts:
+                cand = normalize_domain(parts[0])
+                if DOMAIN_RE.match(cand):
+                    candidate = cand
 
         if candidate and should_keep_domain(candidate):
             domains.add(candidate)
@@ -216,6 +240,10 @@ def parse_rules(text: str) -> Set[str]:
 
 
 def dedupe_subdomains(domains: Set[str]) -> List[str]:
+    """
+    子域名去冗余：若父域已在集合中则丢弃子域。
+    按域名长度升序排列，短域名（父域）优先处理。
+    """
     sorted_domains = sorted(domains, key=lambda x: (len(x), x))
     result = []
     domain_set = set(domains)
@@ -309,9 +337,74 @@ def generate_report(
     return "\n".join(lines)
 
 
+def run_self_test():
+    """启动前自检，验证核心解析逻辑"""
+    print("[*] 运行自检...")
+    errors = []
+
+    # AdGuard 普通规则
+    r = parse_rules("||ads.example.com^")
+    if "ads.example.com" not in r:
+        errors.append("FAIL: ||ads.example.com^ 未被提取")
+
+    # AdGuard 带选项规则
+    r = parse_rules("||ads.example.com^$third-party")
+    if "ads.example.com" not in r:
+        errors.append("FAIL: ||ads.example.com^$third-party 未被提取")
+
+    # AdGuard 通配符规则
+    r = parse_rules("||*.ads.example.com^")
+    if "ads.example.com" not in r:
+        errors.append("FAIL: ||*.ads.example.com^ 未被提取")
+
+    # Hosts 格式
+    r = parse_rules("0.0.0.0 ads.example.com")
+    if "ads.example.com" not in r:
+        errors.append("FAIL: hosts 格式未被提取")
+
+    # dnsmasq 格式
+    r = parse_rules("address=/ads.example.com/")
+    if "ads.example.com" not in r:
+        errors.append("FAIL: dnsmasq 格式未被提取")
+
+    # cosmetic 规则不应提取
+    r = parse_rules("example.com##.ads")
+    if "example.com" in r:
+        errors.append("FAIL: cosmetic 规则被误提取")
+
+    # 白名单精确匹配，子域不应被保护
+    r = parse_rules("||ads.youtube.com^")
+    if "ads.youtube.com" not in r:
+        errors.append("FAIL: ads.youtube.com 被白名单误过滤（应保留）")
+
+    # 公共后缀本身不应进入
+    r = parse_rules("||com.cn^")
+    if "com.cn" in r:
+        errors.append("FAIL: com.cn 公共后缀被误收录")
+
+    # .com.cn 域名不应被误删
+    r = parse_rules("||adlog.vivo.com.cn^")
+    if "adlog.vivo.com.cn" not in r:
+        errors.append("FAIL: adlog.vivo.com.cn 被 PSL 误删")
+
+    # URL 行不应提取
+    r = parse_rules("https://ads.example.com/banner")
+    if "ads.example.com" in r:
+        errors.append("FAIL: URL 行被误提取")
+
+    if errors:
+        for e in errors:
+            print("  " + e)
+        print("[-] 自检未通过，请检查上述问题后再运行。")
+        exit(1)
+    else:
+        print("[+] 自检全部通过")
+
+
 def main():
     print("[*] 启动转换流程 (sing-box v1.13.x)")
 
+    run_self_test()
     load_public_suffix_list()
 
     now = datetime.now(CST)
@@ -344,7 +437,7 @@ def main():
     else:
         print("[*] 未找到 " + BLOCK_FILE + " 或文件为空，跳过")
 
-    # 3. 应用白名单
+    # 3. 应用白名单（只向下保护子域，不向上保护父域）
     custom_allow = load_custom(ALLOW_FILE)
     allow_removed = 0
     if custom_allow:
