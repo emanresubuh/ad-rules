@@ -83,6 +83,7 @@ def load_public_suffix_list():
         print("[+] PSL 加载完成: " + str(len(PUBLIC_SUFFIXES)) + " 条公共后缀")
     except Exception as e:
         print("[!] PSL 加载失败: " + str(e))
+        # 不清空集合，但外部会检查是否为空，选择终止
 
 
 def is_public_suffix(domain: str) -> bool:
@@ -404,8 +405,13 @@ def run_self_test():
 def main():
     print("[*] 启动转换流程 (sing-box v1.13.x)")
 
-    run_self_test()
+    # 先加载公共后缀列表，因为自检依赖它
     load_public_suffix_list()
+    if not PUBLIC_SUFFIXES:
+        print("[-] 无法加载 Public Suffix List，任务终止。")
+        exit(1)
+
+    run_self_test()
 
     now = datetime.now(CST)
     now_str = now.strftime("%Y-%m-%d %H:%M CST")
