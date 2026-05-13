@@ -32,13 +32,9 @@ SRS_URL          = "https://raw.githubusercontent.com/" + REPO_USER + "/" + REPO
 PSL_URL          = "https://publicsuffix.org/list/public_suffix_list.dat"
 # -------------------------
 
-# AdGuard 格式：提取 || 和 ^ 之间的域名，^ 后面的选项忽略
 ADGUARD_RE   = re.compile(r"^\|\|([a-z0-9.-]+\.[a-z]{2,})\^")
-# Hosts 格式
 HOSTS_RE     = re.compile(r"^(?:0\.0\.0\.0|127\.0\.0\.1|::1)\s+([a-z0-9.-]+\.[a-z]{2,})")
-# 纯域名格式校验
 DOMAIN_RE    = re.compile(r"^([a-z0-9][a-z0-9-]{0,61}[a-z0-9](?:\.[a-z0-9][a-z0-9-]{0,61}[a-z0-9])+)$")
-# cosmetic/脚本规则（整行跳过，因为这类行提取不出有效域名）
 COSMETIC_RE  = re.compile(r"#[@$?]?#|#%#|#script:")
 
 INVALID_DOMAINS: Set[str] = {
@@ -46,8 +42,6 @@ INVALID_DOMAINS: Set[str] = {
     "ip6-localnet", "ip6-mcastprefix", "ip6-allnodes", "ip6-allrouters", "ip6-allhosts"
 }
 
-# 精确白名单：这些域名及其子域名不应被屏蔽
-# doubleclick.net / googlesyndication.com 是广告域名，不在此列
 WHITELIST_DOMAINS: Set[str] = {
     "youtube.com", "youtu.be", "googlevideo.com", "ytimg.com",
     "google.com", "gstatic.com", "googleapis.com",
@@ -80,13 +74,22 @@ def load_public_suffix_list():
 
 
 def is_public_suffix(domain: str) -> bool:
+    """
+    判断域名本身是否就是一个公共后缀。
+    只做精确匹配和通配符匹配，不做截断匹配，
+    避免把 vivo.com.cn 这类合法域名误判为公共后缀。
+    """
     if not domain:
         return False
+    # 精确匹配：域名本身就在 PSL 里（如 com、cn、com.cn）
     if domain in PUBLIC_SUFFIXES:
         return True
+    # 通配符匹配：PSL 里有 *.xx 条目（如 *.ck）
     parts = domain.split('.')
-    if len(parts) >= 2 and '.'.join(parts[-2:]) in PUBLIC_SUFFIXES:
-        return True
+    if len(parts) >= 2:
+        wildcard = '*.' + '.'.join(parts[1:])
+        if wildcard in PUBLIC_SUFFIXES:
+            return True
     return False
 
 
@@ -95,7 +98,6 @@ def normalize_domain(domain: str) -> str:
 
 
 def should_keep_domain(d: str) -> bool:
-    """域名过滤核心逻辑，只判断域名本身，不判断来源行"""
     if not d or len(d) < 4:
         return False
     if '..' in d:
@@ -104,17 +106,13 @@ def should_keep_domain(d: str) -> bool:
         return False
     if d in WHITELIST_DOMAINS:
         return False
-    # 是否属于白名单域名的子域
     for w in WHITELIST_DOMAINS:
         if d.endswith('.' + w):
             return False
-    # 是否是公共后缀本身（如 com.cn、co.uk）
     if is_public_suffix(d):
         return False
-    # 是否是私有/保留后缀
     if any(d.endswith(s) for s in PRIVATE_SUFFIXES):
         return False
-    # 最终格式校验
     if not DOMAIN_RE.match(d):
         return False
     return True
@@ -177,28 +175,20 @@ def fetch_text(url: str) -> str:
 
 
 def parse_rules(text: str) -> Set[str]:
-    """
-    解析规则，先提取域名再过滤。
-    不对整行做内容判断（除了必须跳过的 cosmetic 行），
-    确保带选项的规则（如 $third-party）不会因选项而漏掉域名。
-    """
     domains: Set[str] = set()
 
     for line in text.splitlines():
         line = line.strip().lower()
 
-        # 空行、注释行、白名单行、文件头跳过
         if not line or line.startswith(("!", "#", "@@", "[adblock", ";")):
             continue
 
-        # cosmetic/脚本规则整行跳过（这类行本身提取不出有效域名）
         if COSMETIC_RE.search(line):
             continue
 
         candidate = None
 
-        # 1. AdGuard 格式：||example.com^  或  ||example.com^$options
-        #    只提取 ^ 前的域名，^ 后的选项一律忽略
+        # 1. AdGuard 格式：||example.com^ 或 ||example.com^$options
         m = ADGUARD_RE.match(line)
         if m:
             candidate = normalize_domain(m.group(1))
@@ -209,8 +199,7 @@ def parse_rules(text: str) -> Set[str]:
             if m:
                 candidate = normalize_domain(m.group(1))
 
-            # 3. 纯域名兜底（无任何前缀的裸域名行）
-            #    此处需要额外过滤含 / 或 http 的行，避免把 URL 误提取
+            # 3. 纯域名兜底
             else:
                 if '/' in line or line.startswith("http"):
                     continue
@@ -227,10 +216,6 @@ def parse_rules(text: str) -> Set[str]:
 
 
 def dedupe_subdomains(domains: Set[str]) -> List[str]:
-    """
-    子域名去冗余：若父域已在集合中则丢弃子域
-    按域名长度升序排列，短域名（父域）优先处理
-    """
     sorted_domains = sorted(domains, key=lambda x: (len(x), x))
     result = []
     domain_set = set(domains)
@@ -327,7 +312,6 @@ def generate_report(
 def main():
     print("[*] 启动转换流程 (sing-box v1.13.x)")
 
-    # 加载 PSL
     load_public_suffix_list()
 
     now = datetime.now(CST)
@@ -360,7 +344,7 @@ def main():
     else:
         print("[*] 未找到 " + BLOCK_FILE + " 或文件为空，跳过")
 
-    # 3. 应用白名单（只向下保护子域，不向上保护父域）
+    # 3. 应用白名单
     custom_allow = load_custom(ALLOW_FILE)
     allow_removed = 0
     if custom_allow:
