@@ -1,2 +1,6 @@
 # 手动添加需要屏蔽的域名，每行一个
 api-fp-retry-bj.fengkongcloud.com
+dnstest.weixin.qq.com
+ad.wx.com
+bc.weixin.qq.com
+channels.weixin.qq.com
