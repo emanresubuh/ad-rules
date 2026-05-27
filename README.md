@@ -8,30 +8,30 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ## 最新构建报告
 
-## 📦 AdBlock Rules — 2026-05-26 23:24 CST
+## 📦 AdBlock Rules — 2026-05-27 14:08 CST
 
 ### 📊 本次统计
 
 | 项目 | 数量 |
 |---|---|
 | 订阅源数量 | 4 个 |
-| 订阅解析原始域名 | 296068 个 |
+| 订阅解析原始域名 | 309858 个 |
 | 自定义屏蔽追加 | 5 个 |
 | 白名单移除 | 1 个 |
-| 子域名去冗余前 | 296071 个 |
-| **最终规则数量** | **287363 个** |
-| SRS 文件大小 | 2339.2 KB |
+| 子域名去冗余前 | 309861 个 |
+| **最终规则数量** | **301155 个** |
+| SRS 文件大小 | 2444.8 KB |
 
 ### 📈 变化对比
 
-🔻 较上次减少 **6164** 条
+🔺 较上次增加 **13792** 条
 
 ### 📥 订阅源明细
 
-  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → 解析出 **198681** 个域名
+  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → 解析出 **212437** 个域名
   - `https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt` → 解析出 **905** 个域名
-  - `https://anti-ad.net/adguard.txt` → 解析出 **105439** 个域名
-  - `https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_15_DnsFilter/filter.txt` → 解析出 **162812** 个域名
+  - `https://anti-ad.net/adguard.txt` → 解析出 **105442** 个域名
+  - `https://raw.githubusercontent.com/AdguardTeam/FiltersRegistry/master/filters/filter_15_DnsFilter/filter.txt` → 解析出 **162978** 个域名
 
 ### 🚀 使用方式
 
