@@ -1,4 +1,1 @@
-https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt
-https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt
-https://anti-ad.net/adguard.txt
 https://raw.githubusercontent.com/DustinWin/ruleset_geodata/sing-box-ruleset/ads.json
