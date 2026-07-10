@@ -4,3 +4,4 @@ dnstest.weixin.qq.com
 ad.wx.com
 bc.weixin.qq.com
 channels.weixin.qq.com
+appassets.androidplatform.net
