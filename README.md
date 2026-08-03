@@ -8,7 +8,7 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ## 最新构建报告
 
-## 📦 AdBlock Rules — 2026-08-03 13:29 CST
+## 📦 AdBlock Rules — 2026-08-03 15:23 CST
 
 ### 📊 本次统计
 
@@ -16,15 +16,15 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 |---|---|
 | 订阅源数量 | 3 个 |
 | 订阅解析原始域名 | 259743 个 |
-| 自定义屏蔽追加 | 6 个 |
+| 自定义屏蔽追加 | 12 个 |
 | 白名单移除 | 1 个 |
-| 子域名去冗余前 | 259748 个 |
-| **最终规则数量** | **254148 个** |
+| 子域名去冗余前 | 259754 个 |
+| **最终规则数量** | **254154 个** |
 | SRS 文件大小 | 1900.4 KB |
 
 ### 📈 变化对比
 
-🔺 较上次增加 **429** 条
+🔺 较上次增加 **6** 条
 
 ### 📥 订阅源明细
 
