@@ -5,3 +5,10 @@ ad.wx.com
 bc.weixin.qq.com
 channels.weixin.qq.com
 appassets.androidplatform.net
+viav-cse.avlyun.com
+isecure.vivo.com.cn
+stinmmtn.vivo.com.cn
+perm-api.vivo.com.cn
+appcontentapi.vivo.com.cn
+isecure.vivo.com.cn
+st-onlinegame.vivo.com.cn
