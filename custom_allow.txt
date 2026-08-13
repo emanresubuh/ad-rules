@@ -2,3 +2,4 @@
 # 会从最终规则中移除这些域名及其父域匹配
 gia.jd.com
 api.m.jd.com
+sdkapi.kookong.com
