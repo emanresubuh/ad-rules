@@ -13,3 +13,5 @@ appcontentapi.vivo.com.cn
 isecure.vivo.com.cn
 st-onlinegame.vivo.com.cn
 dlied1.cdntips.net
+zyb-toufang.cdnjtzy.com
+xgjvideo.tos-cn-beijing.volces.com
