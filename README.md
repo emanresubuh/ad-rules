@@ -8,30 +8,30 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ## 最新构建报告
 
-## 📦 AdBlock Rules — 2026-11-06 16:41 CST
+## 📦 AdBlock Rules — 2026-11-07 15:56 CST
 
 ### 📊 本次统计
 
 | 项目 | 数量 |
 |---|---|
 | 订阅源数量 | 4 个 |
-| 订阅解析原始域名 | 264983 个 |
+| 订阅解析原始域名 | 265542 个 |
 | 自定义屏蔽追加 | 16 个 |
 | 白名单移除 | 2 个 |
-| 子域名去冗余前 | 264997 个 |
-| **最终规则数量** | **260208 个** |
-| SRS 文件大小 | 1950.6 KB |
+| 子域名去冗余前 | 265556 个 |
+| **最终规则数量** | **258786 个** |
+| SRS 文件大小 | 1941.7 KB |
 
 ### 📈 变化对比
 
-🔻 较上次减少 **13402** 条
+🔻 较上次减少 **1422** 条
 
 ### 📥 订阅源明细
 
-  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → 解析出 **223509** 个域名
+  - `https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt` → 解析出 **225485** 个域名
   - `https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/AWAvenue-Ads-Rule.txt` → 解析出 **969** 个域名
   - `https://anti-ad.net/adguard.txt` → 解析出 **101766** 个域名
-  - `https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/adblock/pro.txt?ref_type=heads` → 解析出 **223509** 个域名
+  - `https://gitlab.com/hagezi/mirror/-/raw/main/dns-blocklists/adblock/pro.txt?ref_type=heads` → 解析出 **225485** 个域名
 
 ### 🚀 使用方式
 
