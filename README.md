@@ -8,7 +8,7 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ## 最新构建报告
 
-## 📦 AdBlock Rules — 2026-11-20 09:37 CST
+## 📦 AdBlock Rules — 2026-11-20 17:19 CST
 
 ### 📊 本次统计
 
@@ -24,7 +24,7 @@ https://raw.githubusercontent.com/emanresubuh/ad-rules/main/rule_srs/adblock_rul
 
 ### 📈 变化对比
 
-🔺 较上次增加 **10899** 条
+➡️ 与上次相比无变化
 
 ### 📥 订阅源明细
 
