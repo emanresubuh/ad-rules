@@ -17,3 +17,10 @@ zyb-toufang.cdnjtzy.com
 xgjvideo.tos-cn-beijing.volces.com
 dm.wo.com.cn
 xbext.com
+i1.go2yd.com
+imagestatic.kaixinkan.com.cn
+zhanstatic.vivo.com.cn
+inews.gtimg.com
+topicstatic.vivo.com.cn
+browserconf.vivo.com.cn
+browserstatic.vivo.com.cn
