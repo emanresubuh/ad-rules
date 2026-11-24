@@ -24,3 +24,4 @@ inews.gtimg.com
 topicstatic.vivo.com.cn
 browserconf.vivo.com.cn
 browserstatic.vivo.com.cn
+sentinelapi.vivo.com.cn
