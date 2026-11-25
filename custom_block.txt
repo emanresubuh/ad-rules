@@ -85,3 +85,6 @@ abeacdataprt-stsdk.vivo.com.cn
 browserconf.vivo.com.cn
 browserstatic.vivo.com.cn
 sentinelapi.vivo.com.cn
+ro-up.vivo.com.cn
+f-up.vivo.com.cn
+ue.vivo.com.cn
