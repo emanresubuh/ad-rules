@@ -89,3 +89,5 @@ sentinelapi.vivo.com.cn
 ro-up.vivo.com.cn
 f-up.vivo.com.cn
 ue.vivo.com.cn
+fc-open-materiel.vivo.com.cn
+stvideo-magazine.kaixinkan.com.cn
